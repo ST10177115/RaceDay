@@ -62,3 +62,5 @@ app.UseAuthorization();    // are you allowed?
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }
