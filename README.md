@@ -6,7 +6,9 @@ RaceDay is a web-based event management system for South African road running, w
 
 
 
-\*\*Video demo (unlisted YouTube):\*\* TO BE ADDED
+\*\*Video demo (unlisted YouTube):https://youtu.be/KqDnsz4Z8EY
+
+
 
 
 
