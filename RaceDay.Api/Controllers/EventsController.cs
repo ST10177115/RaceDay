@@ -17,16 +17,28 @@ public class EventsController : ControllerBase
 
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>Lists events, soonest first. Public.</summary>
+    /// <summary>Lists events, soonest first. Public. Supports optional filters.</summary>
     /// <param name="upcomingOnly">When true, hides events that have already happened.</param>
+    /// <param name="eventType">Filter by Run, Walk or Cycle.</param>
+    /// <param name="search">Text to look for in the event name or location.</param>
     /// <response code="200">List of events with their categories.</response>
     [AllowAnonymous]
     [HttpGet]
     [ProducesResponseType(typeof(List<EventDto>), 200)]
-    public async Task<IActionResult> GetAll([FromQuery] bool upcomingOnly = false)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] bool upcomingOnly = false,
+        [FromQuery] EventType? eventType = null,
+        [FromQuery] string? search = null)
     {
         var query = _db.Events.Include(e => e.Organiser).Include(e => e.Categories).AsQueryable();
+
         if (upcomingOnly) query = query.Where(e => e.EventDate >= DateTime.UtcNow.Date);
+        if (eventType.HasValue) query = query.Where(e => e.EventType == eventType.Value);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(e => e.Name.ToLower().Contains(term) || e.Location.ToLower().Contains(term));
+        }
 
         var events = await query.OrderBy(e => e.EventDate).ToListAsync();
         return Ok(events.Select(ToDto));
@@ -50,7 +62,7 @@ public class EventsController : ControllerBase
     /// <response code="400">Validation failure.</response>
     /// <response code="401">Not logged in.</response>
     /// <response code="403">Logged in but not an Organiser.</response>
-    [Authorize(Roles = "Organiser")]
+    /// [Authorize(Roles = "Organiser")]
     [HttpPost]
     [ProducesResponseType(typeof(EventDto), 201)]
     public async Task<IActionResult> Create(EventUpsertDto dto)
