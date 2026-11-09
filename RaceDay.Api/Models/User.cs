@@ -11,6 +11,7 @@ public class User
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public string? ProfilePictureUrl { get; set; }
 
     public ICollection<Event> OrganisedEvents { get; set; } = new List<Event>();
     public ICollection<Enrolment> Enrolments { get; set; } = new List<Enrolment>();

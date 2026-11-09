@@ -14,6 +14,7 @@ public class Event
     public decimal DistanceKm { get; set; }
     public EventType EventType { get; set; }
     public string? RouteInfo { get; set; }
+    public string? BannerUrl { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Category> Categories { get; set; } = new List<Category>();
