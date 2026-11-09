@@ -35,6 +35,7 @@ public class EventDto
     public decimal DistanceKm { get; set; }
     public EventType EventType { get; set; }
     public string? RouteInfo { get; set; }
+    public string? BannerUrl { get; set; }
     public List<CategoryDto> Categories { get; set; } = new();
     public int? EnrolmentCount { get; set; }
 }
