@@ -44,6 +44,35 @@ public class EventsController : ControllerBase
         return Ok(events.Select(ToDto));
     }
 
+    /// <summary>Lists the logged-in Organiser's own events, with the total enrolments for each.</summary>
+    /// <response code="200">The Organiser's events, soonest first.</response>
+    /// <response code="401">Not logged in.</response>
+    /// <response code="403">Logged in but not an Organiser.</response>
+    [Authorize(Roles = "Organiser")]
+    [HttpGet("mine")]
+    [ProducesResponseType(typeof(List<EventDto>), 200)]
+    public async Task<IActionResult> GetMine()
+    {
+        var events = await _db.Events.Include(e => e.Organiser).Include(e => e.Categories)
+            .Where(e => e.OrganiserId == CurrentUserId)
+            .OrderBy(e => e.EventDate)
+            .ToListAsync();
+
+        var counts = await _db.Enrolments
+            .Where(en => en.Category.Event.OrganiserId == CurrentUserId)
+            .GroupBy(en => en.Category.EventId)
+            .Select(g => new { EventId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.EventId, x => x.Count);
+
+        var result = events.Select(e =>
+        {
+            var dto = ToDto(e);
+            dto.EnrolmentCount = counts.GetValueOrDefault(e.EventId);
+            return dto;
+        });
+        return Ok(result);
+    }
+
     /// <summary>Gets one event with its categories. Public.</summary>
     /// <response code="200">The event.</response>
     /// <response code="404">Event not found.</response>
@@ -62,7 +91,7 @@ public class EventsController : ControllerBase
     /// <response code="400">Validation failure.</response>
     /// <response code="401">Not logged in.</response>
     /// <response code="403">Logged in but not an Organiser.</response>
-    /// [Authorize(Roles = "Organiser")]
+    [Authorize(Roles = "Organiser")]
     [HttpPost]
     [ProducesResponseType(typeof(EventDto), 201)]
     public async Task<IActionResult> Create(EventUpsertDto dto)
