@@ -36,4 +36,5 @@ public class EventDto
     public EventType EventType { get; set; }
     public string? RouteInfo { get; set; }
     public List<CategoryDto> Categories { get; set; } = new();
+    public int? EnrolmentCount { get; set; }
 }
