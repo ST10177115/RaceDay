@@ -79,7 +79,7 @@ public class ResultsController : ControllerBase
         return Ok(ToDto(result));
     }
 
-    /// <summary>Lists the logged-in Participant's own results across all events.</summary>
+    /// <summary>Lists the logged-in Participant's own results across all events, with the total finishers per category.</summary>
     /// <response code="200">The participant's results, most recent event first.</response>
     /// <response code="401">Not logged in.</response>
     /// <response code="403">Logged in but not a Participant.</response>
@@ -91,11 +91,11 @@ public class ResultsController : ControllerBase
         var list = await Query()
             .Where(r => r.Enrolment.ParticipantId == CurrentUserId)
             .ToListAsync();
-        return Ok(list.OrderByDescending(r => r.Enrolment.Category.Event.EventDate).Select(ToDto));
+        return Ok(await WithTotals(list.OrderByDescending(r => r.Enrolment.Category.Event.EventDate)));
     }
 
     /// <summary>Lists the results for an event, grouped by category and ordered by position. Public.</summary>
-    /// <response code="200">The event's results.</response>
+    /// <response code="200">The event's results, with the total finishers per category.</response>
     /// <response code="404">Event not found.</response>
     [AllowAnonymous]
     [HttpGet("api/events/{eventId}/results")]
@@ -105,10 +105,25 @@ public class ResultsController : ControllerBase
         if (!await _db.Events.AnyAsync(e => e.EventId == eventId)) return NotFound();
 
         var list = await Query().Where(r => r.Enrolment.Category.EventId == eventId).ToListAsync();
-        return Ok(list
+        return Ok(await WithTotals(list
             .OrderBy(r => r.Enrolment.Category.Name)
-            .ThenBy(r => r.Position ?? int.MaxValue)
-            .Select(ToDto));
+            .ThenBy(r => r.Position ?? int.MaxValue)));
+    }
+
+    // Adds "how many finished in this category" to each result, for example 47th out of 312
+    private async Task<List<ResultDto>> WithTotals(IEnumerable<Result> results)
+    {
+        var dtos = results.Select(ToDto).ToList();
+        var categoryIds = dtos.Select(d => d.CategoryId).Distinct().ToList();
+
+        var totals = await _db.Results
+            .Where(r => r.Status == "Finished" && categoryIds.Contains(r.Enrolment.CategoryId))
+            .GroupBy(r => r.Enrolment.CategoryId)
+            .Select(g => new { CategoryId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CategoryId, x => x.Count);
+
+        foreach (var d in dtos) d.TotalFinishers = totals.GetValueOrDefault(d.CategoryId);
+        return dtos;
     }
 
     // Returns an error response if the data breaks a rule, otherwise null
