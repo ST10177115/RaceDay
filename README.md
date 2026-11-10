@@ -1,122 +1,26 @@
-\# RaceDay API (POE Part 2)
+## Part 3 status
 
+**Completed:** API additions for the front end (event filters, organiser "my events" endpoint with enrolment counts, finisher totals on results), Azure Blob Storage upload code with banner and profile picture columns and migration, the `RaceDay.Web` MVC project with session and API client setup, and a Dockerfile.
 
+**Not completed:** the MVC pages (login, dashboards, enrolment) and the end-to-end Blob upload demo, because of time. Known issue: some unit tests fail on this branch after the Blob storage commit; Part 2 on `master` is green.
 
-RaceDay is a web-based event management system for South African road running, walking and cycling events. This part is the RESTful API built with ASP.NET Core Web API (C#), Entity Framework Core (code-first) and SQL Server.
+**Run with Docker:**
+`docker build -t raceday-web . && docker run -p 8080:8080 raceday-web`
 
+**Video:** TO BE ADDED
 
+**AI disclosure:** I used an AI assistant (Claude) to help plan and draft code, tests and documentation, and I ran and committed it myself.
 
-\*\*Video demo (unlisted YouTube):\*\* TO BE ADDED
+## CI status for Part 3
 
+GitHub Actions currently cannot start jobs on my account. Every run since 9 November fails within seconds with the message "The job was not started because your account is locked due to a billing issue", before any of my code runs. My GitHub billing page shows a Free plan with $0 billable usage and no payment due, and I have contacted GitHub support to unlock the account.
 
+![Account lock error](docs/images/ci-blocked-billing-lock.png)
 
-\## Roles
+The workflow file (`.github/workflows/ci.yml`) has not changed since Part 2, where it ran green (see the screenshots above). It restores, builds the whole solution, which now includes `RaceDay.Web`, and runs the unit tests on every push.
 
+### Local test run
 
+All unit tests pass locally on the `part-3` branch (the tests use an in-memory database and a fake Blob storage service, so no Azure account is needed):
 
-| Role | Can do |
-
-|---|---|
-
-| \*\*Organiser\*\* | Create, edit and delete their own events; manage categories for their events; view all enrolments for their events; capture and correct results. |
-
-| \*\*Participant\*\* | Register, browse events and categories, enrol in an event by choosing a category, view and withdraw their own enrolments, view their own results. |
-
-
-
-Anyone (no login) can view events, categories and an event's results. Role-based access is enforced at the API level: a wrong role gets \*\*403\*\*, and a request with no login gets \*\*401\*\*.
-
-
-
-\## Setup and run
-
-
-
-\*\*Requirements:\*\* .NET 8 SDK, SQL Server (Express is fine), Visual Studio 2022 or the `dotnet` CLI.
-
-
-
-1\. Clone the repo and open `RaceDay.sln`.
-
-2\. In `RaceDay.Api/appsettings.json`, set `ConnectionStrings:DefaultConnection` to your own SQL Server instance. It is currently set for `LabVM2049826\\SQLEXPRESS` and must be changed on any other machine.
-
-3\. Create the database by running the migrations:
-
-&#x20;  - Visual Studio: Package Manager Console, then `Update-Database`
-
-&#x20;  - CLI: `dotnet ef database update --project RaceDay.Api`
-
-4\. Run the API (F5, or `dotnet run --project RaceDay.Api`) and open `https://localhost:7265/swagger`.
-
-5\. Log in with `POST /api/auth/login` in Swagger. The session cookie is then sent automatically with later requests.
-
-
-
-\*\*Registering an Organiser\*\* needs the invite code from `appsettings.json` (`OrganiserInviteCode`, currently `RACEDAY-ORG-2026`). Participants register without a code.
-
-
-
-\## Run the tests
-
-
-
-```
-
-dotnet test
-
-```
-
-
-
-53 unit tests run against an in-memory database. They cover registration and login, event management, role-based rejection, and enrolments, with both success and failure cases.
-
-
-
-\## CI/CD
-
-
-
-GitHub Actions (`.github/workflows/ci.yml`) restores, builds and runs all tests on every push.
-
-
-
-!\[Green build](docs/images/ci-green-build.png)
-
-
-
-!\[Tests passed](docs/images/ci-tests-passed.png)
-
-
-
-\## Part 1 planning documents
-
-
-
-The `docs` folder contains the ERD (`ERD.png`), the API endpoint plan (`API\_Endpoint\_Plan.md`) and the SQL script (`RaceDay\_Schema.sql`).
-
-
-
-\## Design decisions and differences from the first Part 1 plan
-
-
-
-\- \*\*Session authentication:\*\* login uses ASP.NET Core cookie authentication, with the user's ID and role stored in the cookie. Passwords are hashed with `PasswordHasher` and never stored in plain text.
-
-\- \*\*Organiser registration:\*\* to stop users giving themselves organiser powers, registering as an Organiser requires an invite code.
-
-\- \*\*Events\*\* also store `DistanceKm` and `EventType` (Run, Walk or Cycle), as required by the Part 2 brief. These two columns were missing from my first ERD, so I added them to the ERD, SQL script and endpoint plan in `/docs` so that everything matches the API.
-
-\- \*\*Ownership checks:\*\* an Organiser can only edit or delete events, categories and results belonging to their own events.
-
-\- \*\*One enrolment per event:\*\* a participant cannot enrol in two categories of the same event.
-
-\- \*\*Business rules:\*\* enrolment is blocked when the category is full or the event has passed; results can only be captured after the event date and a position cannot repeat within a category; a category with enrolments cannot be deleted; and a participant cannot withdraw once a result exists.
-
-
-
-\## AI disclosure
-
-
-
-I used an AI assistant (Claude) to help plan and draft the ERD, endpoint plan, SQL script, API code, unit tests, GitHub Actions workflow and this README. I ran, tested and committed everything myself, and I can explain how it works in my video.
-
+![Local tests passed](docs/images/local-tests-passed.png)

@@ -28,4 +28,5 @@ public class ResultDto
     public TimeSpan? FinishTime { get; set; }
     public int? Position { get; set; }
     public string Status { get; set; } = "";
+    public int TotalFinishers { get; set; }
 }

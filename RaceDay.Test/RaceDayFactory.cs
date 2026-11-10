@@ -1,14 +1,26 @@
 ﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RaceDay.Api.Data;
+using RaceDay.Api.Services;
+using ApiProgram = Program;
 
 namespace RaceDay.Test;
 
-/// <summary>Starts the real API in memory, using an in-memory database instead of SQL Server.</summary>
+/// <summary>A stand-in for Azure Blob Storage, so tests never need a real storage account.</summary>
+public class FakeBlobStorageService : IBlobStorageService
+{
+    public Task<string> UploadAsync(string containerName, IFormFile file)
+        => Task.FromResult($"https://fake-storage.test/{containerName}/{Guid.NewGuid()}.png");
+
+    public Task DeleteAsync(string containerName, string blobUrl) => Task.CompletedTask;
+}
+
+/// <summary>Starts the real API in memory, using an in-memory database and a fake image store.</summary>
 public class RaceDayFactory : WebApplicationFactory<Program>
 {
     public const string OrganiserCode = "TEST-ORG-CODE";
@@ -27,11 +39,16 @@ public class RaceDayFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             // Remove the SQL Server registration and use the in-memory database instead
-            var descriptor = services.SingleOrDefault(
+            var dbDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<RaceDayDbContext>));
-            if (descriptor != null) services.Remove(descriptor);
-
+            if (dbDescriptor != null) services.Remove(dbDescriptor);
             services.AddDbContext<RaceDayDbContext>(o => o.UseInMemoryDatabase(_dbName));
+
+            // Replace the real Azure Blob service with the fake one
+            var blobDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(IBlobStorageService));
+            if (blobDescriptor != null) services.Remove(blobDescriptor);
+            services.AddSingleton<IBlobStorageService, FakeBlobStorageService>();
         });
     }
 

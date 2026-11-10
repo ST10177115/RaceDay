@@ -1,0 +1,99 @@
+﻿@model RaceDay.Web.Models.EventDetailsViewModel
+@{
+    ViewData["Title"] = Model.Event?.Name ?? "Event";
+}
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">@TempData["Error"]</div>
+}
+
+@if (Model.Event == null)
+{
+    <div class="alert alert-warning">@Model.Error</div>
+    <a asp-controller="Home" asp-action="Index" class="btn btn-outline-primary">Back to events</a>
+}
+else
+{
+    var e = Model.Event;
+
+    @if (!string.IsNullOrEmpty(e.BannerUrl))
+    {
+        <img src="@e.BannerUrl" class="img-fluid rounded mb-3" alt="@e.Name banner" style="max-height:260px;width:100%;object-fit:cover" />
+    }
+
+    <span class="badge bg-warning text-dark mb-2">@e.EventType</span>
+    <h1 class="h3">@e.Name</h1>
+    <p class="text-muted">
+        @e.EventDate.ToString("dddd, d MMMM yyyy") &middot; @e.Location &middot; @e.DistanceKm.ToString("0.##") km
+        &middot; organised by @e.OrganiserName
+    </p>
+
+    @if (!string.IsNullOrWhiteSpace(e.Description))
+    {
+        <p>@e.Description</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(e.RouteInfo))
+    {
+        <p><strong>Route:</strong> @e.RouteInfo</p>
+    }
+
+    <h2 class="h5 mt-4">Categories</h2>
+    @if (!e.Categories.Any())
+    {
+        <p class="text-muted">The organiser has not added any categories yet.</p>
+    }
+    else
+    {
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Category</th><th>Distance</th><th>Places</th></tr></thead>
+            <tbody>
+                @foreach (var c in e.Categories)
+                {
+                    <tr>
+                        <td>@c.Name</td>
+                        <td>@c.DistanceKm.ToString("0.##") km</td>
+                        <td>@c.MaxParticipants</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (User.IsInRole("Participant"))
+        {
+            <form asp-action="Enrol" method="post" class="row g-2 align-items-end">
+                <input type="hidden" name="eventId" value="@e.EventId" />
+                <div class="col-md-5">
+                    <label class="form-label" for="categoryId">Choose a category</label>
+                    <select name="categoryId" id="categoryId" class="form-select">
+                        @foreach (var c in e.Categories)
+                        {
+                            <option value="@c.CategoryId">@c.Name (@c.DistanceKm.ToString("0.##") km)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary">Enrol</button>
+                </div>
+            </form>
+        }
+        else if (User.IsInRole("Organiser"))
+        {
+            <div class="alert alert-info">Organisers manage events and cannot enrol in them.</div>
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <a asp-controller="Account" asp-action="Login"
+                   asp-route-returnUrl="@Url.Action("Details", "Events", new { id = e.EventId })">Log in</a>
+                as a Participant to enrol.
+            </div>
+        }
+    }
+
+    <a asp-controller="Home" asp-action="Index" class="btn btn-link mt-3">&larr; Back to events</a>
+}

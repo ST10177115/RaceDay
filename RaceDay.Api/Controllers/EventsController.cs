@@ -1,10 +1,12 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RaceDay.Api.Data;
 using RaceDay.Api.Dtos;
 using RaceDay.Api.Models;
+using RaceDay.Api.Services;
 
 namespace RaceDay.Api.Controllers;
 
@@ -13,23 +15,78 @@ namespace RaceDay.Api.Controllers;
 public class EventsController : ControllerBase
 {
     private readonly RaceDayDbContext _db;
-    public EventsController(RaceDayDbContext db) => _db = db;
+    private readonly IBlobStorageService _blobs;
+
+    public EventsController(RaceDayDbContext db, IBlobStorageService blobs)
+    {
+        _db = db;
+        _blobs = blobs;
+    }
 
     private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>Lists events, soonest first. Public.</summary>
+    /// <summary>Lists events, soonest first. Public. Supports optional filters.</summary>
     /// <param name="upcomingOnly">When true, hides events that have already happened.</param>
+    /// <param name="eventType">Filter by Run, Walk or Cycle.</param>
+    /// <param name="search">Text to look for in the event name or location.</param>
     /// <response code="200">List of events with their categories.</response>
     [AllowAnonymous]
     [HttpGet]
     [ProducesResponseType(typeof(List<EventDto>), 200)]
-    public async Task<IActionResult> GetAll([FromQuery] bool upcomingOnly = false)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] bool upcomingOnly = false,
+        [FromQuery] EventType? eventType = null,
+        [FromQuery] string? search = null)
     {
         var query = _db.Events.Include(e => e.Organiser).Include(e => e.Categories).AsQueryable();
-        if (upcomingOnly) query = query.Where(e => e.EventDate >= DateTime.UtcNow.Date);
+
+        if (upcomingOnly)
+        {
+            query = query.Where(e => e.EventDate >= DateTime.UtcNow.Date);
+        }
+
+        if (eventType.HasValue)
+        {
+            query = query.Where(e => e.EventType == eventType.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(e => e.Name.ToLower().Contains(term) || e.Location.ToLower().Contains(term));
+        }
 
         var events = await query.OrderBy(e => e.EventDate).ToListAsync();
         return Ok(events.Select(ToDto));
+    }
+
+    /// <summary>Lists the logged-in Organiser's own events, with the total enrolments for each.</summary>
+    /// <response code="200">The Organiser's events, soonest first.</response>
+    /// <response code="401">Not logged in.</response>
+    /// <response code="403">Logged in but not an Organiser.</response>
+    [Authorize(Roles = "Organiser")]
+    [HttpGet("mine")]
+    [ProducesResponseType(typeof(List<EventDto>), 200)]
+    public async Task<IActionResult> GetMine()
+    {
+        var events = await _db.Events.Include(e => e.Organiser).Include(e => e.Categories)
+            .Where(e => e.OrganiserId == CurrentUserId)
+            .OrderBy(e => e.EventDate)
+            .ToListAsync();
+
+        var counts = await _db.Enrolments
+            .Where(en => en.Category.Event.OrganiserId == CurrentUserId)
+            .GroupBy(en => en.Category.EventId)
+            .Select(g => new { EventId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.EventId, x => x.Count);
+
+        var result = events.Select(e =>
+        {
+            var dto = ToDto(e);
+            dto.EnrolmentCount = counts.GetValueOrDefault(e.EventId);
+            return dto;
+        });
+        return Ok(result);
     }
 
     /// <summary>Gets one event with its categories. Public.</summary>
@@ -85,6 +142,45 @@ public class EventsController : ControllerBase
         return Ok(ToDto(e));
     }
 
+    /// <summary>Uploads or replaces the banner image for an event. Only the owning Organiser can do this.</summary>
+    /// <response code="200">Banner saved. Returns the updated event.</response>
+    /// <response code="400">Missing or invalid image (JPEG, PNG or WebP, max 5 MB).</response>
+    /// <response code="401">Not logged in.</response>
+    /// <response code="403">Not an Organiser, or not the owner of this event.</response>
+    /// <response code="404">Event not found.</response>
+    [Authorize(Roles = "Organiser")]
+    [HttpPost("{id}/banner")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType(typeof(EventDto), 200)]
+    public async Task<IActionResult> UploadBanner(int id, IFormFile file)
+    {
+        var e = await _db.Events.Include(x => x.Organiser).Include(x => x.Categories)
+            .FirstOrDefaultAsync(x => x.EventId == id);
+        if (e == null) return NotFound();
+        if (e.OrganiserId != CurrentUserId) return Forbid();
+
+        string newUrl;
+        try
+        {
+            newUrl = await _blobs.UploadAsync("event-banners", file);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        var oldUrl = e.BannerUrl;
+        e.BannerUrl = newUrl;
+        await _db.SaveChangesAsync();
+
+        if (!string.IsNullOrEmpty(oldUrl))
+        {
+            await _blobs.DeleteAsync("event-banners", oldUrl);
+        }
+
+        return Ok(ToDto(e));
+    }
+
     /// <summary>Deletes an event and its categories. Only the owning Organiser can do this.</summary>
     /// <response code="204">Event deleted.</response>
     /// <response code="401">Not logged in.</response>
@@ -97,6 +193,11 @@ public class EventsController : ControllerBase
         var e = await _db.Events.FindAsync(id);
         if (e == null) return NotFound();
         if (e.OrganiserId != CurrentUserId) return Forbid();
+
+        if (!string.IsNullOrEmpty(e.BannerUrl))
+        {
+            await _blobs.DeleteAsync("event-banners", e.BannerUrl);
+        }
 
         _db.Events.Remove(e);
         await _db.SaveChangesAsync();
@@ -126,6 +227,7 @@ public class EventsController : ControllerBase
         DistanceKm = e.DistanceKm,
         EventType = e.EventType,
         RouteInfo = e.RouteInfo,
+        BannerUrl = e.BannerUrl,
         Categories = e.Categories.Select(c => new CategoryDto
         {
             CategoryId = c.CategoryId,
