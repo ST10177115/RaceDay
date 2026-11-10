@@ -18,3 +18,9 @@ GitHub Actions currently cannot start jobs on my account. Every run since 9 Nove
 ![Account lock error](docs/images/ci-blocked-billing-lock.png)
 
 The workflow file (`.github/workflows/ci.yml`) has not changed since Part 2, where it ran green (see the screenshots above). It restores, builds the whole solution, which now includes `RaceDay.Web`, and runs the unit tests on every push.
+
+### Local test run
+
+All unit tests pass locally on the `part-3` branch (the tests use an in-memory database and a fake Blob storage service, so no Azure account is needed):
+
+![Local tests passed](docs/images/local-tests-passed.png)
