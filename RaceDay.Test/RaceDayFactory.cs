@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RaceDay.Api.Data;
 using RaceDay.Api.Services;
+using ApiProgram = Program;
 
 namespace RaceDay.Test;
 
