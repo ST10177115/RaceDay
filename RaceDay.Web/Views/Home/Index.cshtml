@@ -1,8 +1,58 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+﻿@model RaceDay.Web.Models.HomeViewModel
+@{
+    ViewData["Title"] = "Upcoming events";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+<h1 class="h3 mb-3">Upcoming events</h1>
+
+<form method="get" class="row g-2 mb-4">
+    <div class="col-md-5">
+        <input name="search" value="@Model.Search" class="form-control" placeholder="Search by name or location" />
+    </div>
+    <div class="col-md-3">
+        <select name="eventType" class="form-select">
+            <option value="" selected="@(string.IsNullOrEmpty(Model.EventType))">All types</option>
+            <option value="Run" selected="@(Model.EventType == "Run")">Run</option>
+            <option value="Walk" selected="@(Model.EventType == "Walk")">Walk</option>
+            <option value="Cycle" selected="@(Model.EventType == "Cycle")">Cycle</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a asp-action="Index" class="btn btn-link">Clear</a>
+    </div>
+</form>
+
+@if (Model.Error != null)
+{
+    <div class="alert alert-warning">@Model.Error</div>
+}
+else if (!Model.Events.Any())
+{
+    <div class="alert alert-info">No upcoming events match your search.</div>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-md-2 g-3">
+        @foreach (var e in Model.Events)
+        {
+            <div class="col">
+                <div class="card h-100 shadow-sm">
+                    @if (!string.IsNullOrEmpty(e.BannerUrl))
+                    {
+                        <img src="@e.BannerUrl" class="card-img-top" alt="@e.Name banner" style="max-height:180px;object-fit:cover" />
+                    }
+                    <div class="card-body">
+                        <span class="badge bg-warning text-dark mb-2">@e.EventType</span>
+                        <h2 class="h5 card-title">@e.Name</h2>
+                        <p class="card-text mb-1">@e.EventDate.ToString("dddd, d MMMM yyyy")</p>
+                        <p class="card-text text-muted">@e.Location &middot; @e.DistanceKm.ToString("0.##") km</p>
+                    </div>
+                    <div class="card-footer bg-transparent border-0 pb-3">
+                        <a asp-controller="Events" asp-action="Details" asp-route-id="@e.EventId" class="btn btn-outline-primary btn-sm">View details</a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
